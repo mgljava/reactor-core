@@ -27,6 +27,7 @@ import java.util.function.Supplier;
 import org.reactivestreams.Subscription;
 import reactor.core.CoreSubscriber;
 import reactor.util.annotation.Nullable;
+import reactor.util.context.Context;
 
 /**
  * Buffers a certain number of subsequent elements and emits the buffers.
@@ -115,6 +116,7 @@ final class FluxBuffer<T, C extends Collection<? super T>> extends FluxOperator<
 		@Override
 		public void cancel() {
 			s.cancel();
+			Operators.onDiscardMultiple(buffer, actual.currentContext());
 		}
 
 		@Override
@@ -129,7 +131,9 @@ final class FluxBuffer<T, C extends Collection<? super T>> extends FluxOperator<
 		@Override
 		public void onNext(T t) {
 			if (done) {
-				Operators.onNextDropped(t, actual.currentContext());
+				Context ctx = actual.currentContext();
+				Operators.onNextDropped(t, ctx);
+				Operators.onDiscard(t, ctx);
 				return;
 			}
 
@@ -140,7 +144,9 @@ final class FluxBuffer<T, C extends Collection<? super T>> extends FluxOperator<
 							"The bufferSupplier returned a null buffer");
 				}
 				catch (Throwable e) {
-					onError(Operators.onOperatorError(s, e, t, actual.currentContext()));
+					final Context ctx = actual.currentContext();
+					onError(Operators.onOperatorError(s, e, t, ctx));
+					Operators.onDiscard(t, ctx); //this is in no buffer
 					return;
 				}
 				buffer = b;
@@ -162,6 +168,7 @@ final class FluxBuffer<T, C extends Collection<? super T>> extends FluxOperator<
 			}
 			done = true;
 			actual.onError(t);
+			Operators.onDiscardMultiple(buffer, actual.currentContext());
 		}
 
 		@Override
@@ -257,6 +264,7 @@ final class FluxBuffer<T, C extends Collection<? super T>> extends FluxOperator<
 		@Override
 		public void cancel() {
 			s.cancel();
+			Operators.onDiscardMultiple(buffer, actual.currentContext());
 		}
 
 		@Override
@@ -271,7 +279,9 @@ final class FluxBuffer<T, C extends Collection<? super T>> extends FluxOperator<
 		@Override
 		public void onNext(T t) {
 			if (done) {
-				Operators.onNextDropped(t, actual.currentContext());
+				final Context ctx = actual.currentContext();
+				Operators.onNextDropped(t, ctx);
+				Operators.onDiscard(t, ctx);
 				return;
 			}
 
@@ -285,7 +295,9 @@ final class FluxBuffer<T, C extends Collection<? super T>> extends FluxOperator<
 							"The bufferSupplier returned a null buffer");
 				}
 				catch (Throwable e) {
-					onError(Operators.onOperatorError(s, e, t, actual.currentContext()));
+					Context ctx = actual.currentContext();
+					onError(Operators.onOperatorError(s, e, t, ctx));
+					Operators.onDiscard(t, ctx); //t hasn't got a chance to end up in any buffer
 					return;
 				}
 
@@ -311,9 +323,11 @@ final class FluxBuffer<T, C extends Collection<? super T>> extends FluxOperator<
 			}
 
 			done = true;
+			C b = buffer;
 			buffer = null;
 
 			actual.onError(t);
+			Operators.onDiscardMultiple(b, actual.currentContext());
 		}
 
 		@Override
@@ -438,6 +452,7 @@ final class FluxBuffer<T, C extends Collection<? super T>> extends FluxOperator<
 		public void cancel() {
 			cancelled = true;
 			s.cancel();
+			clear();
 		}
 
 		@Override
@@ -452,7 +467,9 @@ final class FluxBuffer<T, C extends Collection<? super T>> extends FluxOperator<
 		@Override
 		public void onNext(T t) {
 			if (done) {
-				Operators.onNextDropped(t, actual.currentContext());
+				final Context ctx = actual.currentContext();
+				Operators.onNextDropped(t, ctx);
+				Operators.onDiscard(t, ctx);
 				return;
 			}
 
@@ -466,7 +483,9 @@ final class FluxBuffer<T, C extends Collection<? super T>> extends FluxOperator<
 							"The bufferSupplier returned a null buffer");
 				}
 				catch (Throwable e) {
-					onError(Operators.onOperatorError(s, e, t, actual.currentContext()));
+					final Context ctx = actual.currentContext();
+					onError(Operators.onOperatorError(s, e, t, ctx));
+					Operators.onDiscard(t, ctx); //didn't get a chance to be added to a buffer
 					return;
 				}
 
@@ -503,6 +522,15 @@ final class FluxBuffer<T, C extends Collection<? super T>> extends FluxOperator<
 			clear();
 
 			actual.onError(t);
+		}
+
+		@Override
+		public void clear() {
+			Context ctx = actual.currentContext();
+            for(C b: this) {
+            	Operators.onDiscardMultiple(b, ctx);
+            }
+			super.clear();
 		}
 
 		@Override

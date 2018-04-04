@@ -27,7 +27,6 @@ import java.util.function.Supplier;
 import java.util.stream.Stream;
 
 import org.reactivestreams.Publisher;
-import org.reactivestreams.Subscriber;
 import org.reactivestreams.Subscription;
 import reactor.core.CoreSubscriber;
 import reactor.core.Exceptions;
@@ -261,7 +260,7 @@ final class FluxCombineLatest<T, R> extends Flux<R> implements Fuseable, SourceP
 			cancelAll();
 
 			if (WIP.getAndIncrement(this) == 0) {
-				queue.clear();
+				clear();
 			}
 		}
 
@@ -362,12 +361,13 @@ final class FluxCombineLatest<T, R> extends Flux<R> implements Fuseable, SourceP
 				drain();
 			}
 			else {
+				discardQueue(queue, actual.currentContext());
 				Operators.onErrorDropped(e, actual.currentContext());
 			}
 		}
 
 		void drainOutput() {
-			final Subscriber<? super R> a = actual;
+			final CoreSubscriber<? super R> a = actual;
 			final Queue<SourceAndArray> q = queue;
 
 			int missed = 1;
@@ -375,14 +375,13 @@ final class FluxCombineLatest<T, R> extends Flux<R> implements Fuseable, SourceP
 			for (; ; ) {
 
 				if (cancelled) {
-					q.clear();
+					discardQueue(q, a.currentContext());
 					return;
 				}
 
 				Throwable ex = error;
 				if (ex != null) {
-					q.clear();
-
+					discardQueue(q, a.currentContext());
 					a.onError(ex);
 					return;
 				}
@@ -408,7 +407,7 @@ final class FluxCombineLatest<T, R> extends Flux<R> implements Fuseable, SourceP
 		}
 
 		void drainAsync() {
-			final Subscriber<? super R> a = actual;
+			final CoreSubscriber<? super R> a = actual;
 			final Queue<SourceAndArray> q = queue;
 
 			int missed = 1;
@@ -439,6 +438,8 @@ final class FluxCombineLatest<T, R> extends Flux<R> implements Fuseable, SourceP
 						w = Objects.requireNonNull(combiner.apply(v.array), "Combiner returned null");
 					}
 					catch (Throwable ex) {
+						Operators.onDiscardMultiple(Stream.of(v.array), actual.currentContext());
+
 						ex = Operators.onOperatorError(this,	ex,	v.array,
 								actual.currentContext());
 						Exceptions.addThrowable(ERROR, this, ex);
@@ -485,10 +486,10 @@ final class FluxCombineLatest<T, R> extends Flux<R> implements Fuseable, SourceP
 			}
 		}
 
-		boolean checkTerminated(boolean d, boolean empty, Subscriber<?> a, Queue<?> q) {
+		boolean checkTerminated(boolean d, boolean empty, CoreSubscriber<?> a, Queue<SourceAndArray> q) {
 			if (cancelled) {
 				cancelAll();
-				q.clear();
+				discardQueue(q, a.currentContext());
 				return true;
 			}
 
@@ -497,7 +498,7 @@ final class FluxCombineLatest<T, R> extends Flux<R> implements Fuseable, SourceP
 
 				if (e != null && e != Exceptions.TERMINATED) {
 					cancelAll();
-					q.clear();
+					discardQueue(q, a.currentContext());
 					a.onError(e);
 					return true;
 				}
@@ -539,9 +540,13 @@ final class FluxCombineLatest<T, R> extends Flux<R> implements Fuseable, SourceP
 			return r;
 		}
 
+		private void discardQueue(Queue<SourceAndArray> q, Context ctx) {
+			Operators.onDiscardQueueWithClear(q, ctx, v -> Stream.of(v.array));
+		}
+
 		@Override
 		public void clear() {
-			queue.clear();
+			discardQueue(queue, actual.currentContext());
 		}
 
 		@Override
