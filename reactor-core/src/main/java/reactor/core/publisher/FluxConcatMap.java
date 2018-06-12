@@ -234,8 +234,9 @@ final class FluxConcatMap<T, R> extends FluxOperator<T, R> {
 				drain();
 			}
 			else if (!queue.offer(t)) {
-				onError(Operators.onOperatorError(s, Exceptions.failWithOverflow(Exceptions.BACKPRESSURE_ERROR_QUEUE_FULL), t,
-						actual.currentContext()));
+				Context ctx = actual.currentContext();
+				onError(Operators.onOperatorError(s, Exceptions.failWithOverflow(Exceptions.BACKPRESSURE_ERROR_QUEUE_FULL), t, ctx));
+				Operators.onDiscard(t, ctx);
 			}
 			else {
 				drain();
@@ -251,6 +252,7 @@ final class FluxConcatMap<T, R> extends FluxOperator<T, R> {
 					t = Exceptions.terminate(ERROR, this);
 					if (t != TERMINATED) {
 						actual.onError(t);
+						Operators.onDiscardQueueWithClear(queue, actual.currentContext(), null);
 					}
 				}
 			}
@@ -326,11 +328,13 @@ final class FluxConcatMap<T, R> extends FluxOperator<T, R> {
 
 				inner.cancel();
 				s.cancel();
+				Operators.onDiscardQueueWithClear(queue, actual.currentContext(), null);
 			}
 		}
 
 		void drain() {
 			if (WIP.getAndIncrement(this) == 0) {
+				Context ctx = actual.currentContext();
 				for (; ; ) {
 					if (cancelled) {
 						return;
@@ -345,8 +349,7 @@ final class FluxConcatMap<T, R> extends FluxOperator<T, R> {
 							v = queue.poll();
 						}
 						catch (Throwable e) {
-							actual.onError(Operators.onOperatorError(s, e,
-									actual.currentContext()));
+							actual.onError(Operators.onOperatorError(s, e, ctx));
 							return;
 						}
 
@@ -365,10 +368,10 @@ final class FluxConcatMap<T, R> extends FluxOperator<T, R> {
 								"The mapper returned a null Publisher");
 							}
 							catch (Throwable e) {
-								Throwable e_ = Operators.onNextError(v, e, actual.currentContext(), s);
+								Operators.onDiscard(v, ctx);
+								Throwable e_ = Operators.onNextError(v, e, ctx, s);
 								if (e_ != null) {
-									actual.onError(Operators.onOperatorError(s, e, v,
-																			 actual.currentContext()));
+									actual.onError(Operators.onOperatorError(s, e, v, ctx));
 									return;
 								}
 								else {
@@ -397,10 +400,9 @@ final class FluxConcatMap<T, R> extends FluxOperator<T, R> {
 									vr = callable.call();
 								}
 								catch (Throwable e) {
-									Throwable e_ = Operators.onNextError(v, e, actual.currentContext(), s);
+									Throwable e_ = Operators.onNextError(v, e, ctx, s);
 									if (e_ != null) {
-										actual.onError(Operators.onOperatorError(s, e, v,
-																				 actual.currentContext()));
+										actual.onError(Operators.onOperatorError(s, e, v, ctx));
 										return;
 									}
 									else {
@@ -469,7 +471,7 @@ final class FluxConcatMap<T, R> extends FluxOperator<T, R> {
 
 		@Override
 		public void cancel() {
-
+			Operators.onDiscard(value, actual.currentContext());
 		}
 	}
 
@@ -593,8 +595,10 @@ final class FluxConcatMap<T, R> extends FluxOperator<T, R> {
 				drain();
 			}
 			else if (!queue.offer(t)) {
+				Context ctx = actual.currentContext();
 				onError(Operators.onOperatorError(s, Exceptions.failWithOverflow(Exceptions.BACKPRESSURE_ERROR_QUEUE_FULL), t,
-						actual.currentContext()));
+						ctx));
+				Operators.onDiscard(t, ctx);
 			}
 			else {
 				drain();
@@ -662,12 +666,13 @@ final class FluxConcatMap<T, R> extends FluxOperator<T, R> {
 
 				inner.cancel();
 				s.cancel();
+				Operators.onDiscardQueueWithClear(queue, actual.currentContext(), null);
 			}
 		}
 
 		void drain() {
 			if (WIP.getAndIncrement(this) == 0) {
-
+				Context ctx = actual.currentContext();
 				for (; ; ) {
 					if (cancelled) {
 						return;
@@ -694,8 +699,7 @@ final class FluxConcatMap<T, R> extends FluxOperator<T, R> {
 							v = queue.poll();
 						}
 						catch (Throwable e) {
-							actual.onError(Operators.onOperatorError(s, e,
-									actual.currentContext()));
+							actual.onError(Operators.onOperatorError(s, e, ctx));
 							return;
 						}
 
@@ -720,10 +724,10 @@ final class FluxConcatMap<T, R> extends FluxOperator<T, R> {
 										"The mapper returned a null Publisher");
 							}
 							catch (Throwable e) {
-								Throwable e_ = Operators.onNextError(v, e, actual.currentContext(), s);
+								Operators.onDiscard(v, ctx);
+								Throwable e_ = Operators.onNextError(v, e, ctx, s);
 								if (e_ != null) {
-									actual.onError(Operators.onOperatorError(s, e, v,
-																			 actual.currentContext()));
+									actual.onError(Operators.onOperatorError(s, e, v, ctx));
 									return;
 								}
 								else {
@@ -753,7 +757,7 @@ final class FluxConcatMap<T, R> extends FluxOperator<T, R> {
 								}
 								catch (Throwable e) {
 									//does the strategy apply? if so, short-circuit the delayError. In any case, don't cancel
-									Throwable e_ = Operators.onNextPollError(v, e, actual.currentContext());
+									Throwable e_ = Operators.onNextPollError(v, e, ctx);
 									if (e_ == null) {
 										continue;
 									}
@@ -762,7 +766,7 @@ final class FluxConcatMap<T, R> extends FluxOperator<T, R> {
 										continue;
 									}
 									else {
-										actual.onError(Operators.onOperatorError(s, e, v, actual.currentContext()));
+										actual.onError(Operators.onOperatorError(s, e, v, ctx));
 										return;
 									}
 								}
