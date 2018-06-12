@@ -35,6 +35,7 @@ import reactor.core.Disposable;
 import reactor.core.Disposables;
 import reactor.core.Exceptions;
 import reactor.util.annotation.Nullable;
+import reactor.util.context.Context;
 
 /**
  * buffers elements into possibly overlapping buffers whose boundaries are determined
@@ -165,8 +166,16 @@ final class FluxBufferWhen<T, OPEN, CLOSE, BUFFER extends Collection<? super T>>
 		public void onError(Throwable t) {
 			if (Exceptions.addThrowable(ERRORS, this, t)) {
 				subscribers.dispose();
+				Map<Long, BUFFER> bufs;
 				synchronized (this) {
+					bufs = buffers;
 					buffers = null;
+				}
+				if (bufs != null) {
+					Context ctx = actual.currentContext();
+					for (BUFFER b : bufs.values()) {
+						Operators.onDiscardMultiple(b, ctx);
+					}
 				}
 				done = true;
 				drain();
@@ -208,7 +217,7 @@ final class FluxBufferWhen<T, OPEN, CLOSE, BUFFER extends Collection<? super T>>
 					buffers = null;
 				}
 				if (WINDOWS.getAndIncrement(this) == 0) {
-					queue.clear();
+					Operators.onDiscardQueueWithClear(queue, actual.currentContext(), BUFFER::stream);
 				}
 			}
 		}
@@ -228,13 +237,13 @@ final class FluxBufferWhen<T, OPEN, CLOSE, BUFFER extends Collection<? super T>>
 
 				while (e != r) {
 					if (cancelled) {
-						q.clear();
+						Operators.onDiscardQueueWithClear(q, actual.currentContext(), BUFFER::stream);
 						return;
 					}
 
 					boolean d = done;
 					if (d && errors != null) {
-						q.clear();
+						Operators.onDiscardQueueWithClear(q, actual.currentContext(), BUFFER::stream);
 						Throwable ex = Exceptions.terminate(ERRORS, this);
 						a.onError(ex);
 						return;
@@ -258,13 +267,13 @@ final class FluxBufferWhen<T, OPEN, CLOSE, BUFFER extends Collection<? super T>>
 
 				if (e == r) {
 					if (cancelled) {
-						q.clear();
+						Operators.onDiscardQueueWithClear(q, actual.currentContext(), BUFFER::stream);
 						return;
 					}
 
 					if (done) {
 						if (errors != null) {
-							q.clear();
+							Operators.onDiscardQueueWithClear(q, actual.currentContext(), BUFFER::stream);
 							Throwable ex = Exceptions.terminate(ERRORS, this);
 							a.onError(ex);
 							return;

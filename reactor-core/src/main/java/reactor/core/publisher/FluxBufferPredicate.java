@@ -166,6 +166,7 @@ final class FluxBufferPredicate<T, C extends Collection<? super T>>
 		@Override
 		public void cancel() {
 			Operators.terminate(S, this);
+			Operators.onDiscardMultiple(buffer, actual.currentContext());
 		}
 
 		@Override
@@ -196,6 +197,7 @@ final class FluxBufferPredicate<T, C extends Collection<? super T>>
 			}
 			catch (Throwable e) {
 				onError(Operators.onOperatorError(s, e, t, actual.currentContext()));
+				Operators.onDiscardMultiple(buffer, actual.currentContext());
 				return true;
 			}
 
@@ -265,6 +267,7 @@ final class FluxBufferPredicate<T, C extends Collection<? super T>>
 				return;
 			}
 			done = true;
+			Operators.onDiscardMultiple(buffer, actual.currentContext());
 			buffer = null;
 			actual.onError(t);
 		}

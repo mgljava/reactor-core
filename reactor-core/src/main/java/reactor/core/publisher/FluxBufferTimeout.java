@@ -199,6 +199,7 @@ final class FluxBufferTimeout<T, C extends Collection<? super T>> extends FluxOp
 
 				actual.onError(Exceptions.failWithOverflow(
 						"Could not emit buffer due to lack of requests"));
+				Operators.onDiscardMultiple(v, actual.currentContext());
 			}
 		}
 
@@ -233,6 +234,7 @@ final class FluxBufferTimeout<T, C extends Collection<? super T>> extends FluxOp
 				catch (RejectedExecutionException ree) {
 					onError(Operators.onRejectedExecution(ree, subscription, null, value,
 							actual.currentContext()));
+					Operators.onDiscard(value, actual.currentContext());
 					return;
 				}
 			}
@@ -315,6 +317,7 @@ final class FluxBufferTimeout<T, C extends Collection<? super T>> extends FluxOp
 				synchronized (this) {
 					C v = values;
 					if(v != null) {
+						Operators.onDiscardMultiple(v, actual.currentContext());
 						v.clear();
 						values = null;
 					}
@@ -340,6 +343,11 @@ final class FluxBufferTimeout<T, C extends Collection<? super T>> extends FluxOp
 				if (s != null) {
 					this.subscription = null;
 					s.cancel();
+				}
+				C v = values;
+				if (v != null) {
+					Operators.onDiscardMultiple(v, actual.currentContext());
+					v.clear();
 				}
 			}
 		}
