@@ -147,6 +147,7 @@ final class FluxBufferBoundary<T, U, C extends Collection<? super T>>
 		@Override
 		public void cancel() {
 			Operators.terminate(S, this);
+			Operators.onDiscardMultiple(buffer, actual.currentContext());
 			other.cancel();
 		}
 
@@ -173,12 +174,15 @@ final class FluxBufferBoundary<T, U, C extends Collection<? super T>>
 		@Override
 		public void onError(Throwable t) {
 			if(Operators.terminate(S, this)) {
+				C b;
 				synchronized (this) {
+					b = buffer;
 					buffer = null;
 				}
 
 				other.cancel();
 				actual.onError(t);
+				Operators.onDiscardMultiple(b, actual.currentContext());
 				return;
 			}
 			Operators.onErrorDropped(t, actual.currentContext());
@@ -197,7 +201,7 @@ final class FluxBufferBoundary<T, U, C extends Collection<? super T>>
 				if (!b.isEmpty()) {
 					if (emit(b)) {
 						actual.onComplete();
-					}
+					} //failed emit will discard buffer's elements
 				}
 				else {
 					actual.onComplete();
@@ -220,7 +224,7 @@ final class FluxBufferBoundary<T, U, C extends Collection<? super T>>
 				if (b != null && !b.isEmpty()) {
 					if (emit(b)) {
 						actual.onComplete();
-					}
+					} //failed emit will discard buffer content
 				}
 				else {
 					actual.onComplete();
@@ -231,7 +235,9 @@ final class FluxBufferBoundary<T, U, C extends Collection<? super T>>
 		void otherError(Throwable t){
 			Subscription s = S.getAndSet(this, Operators.cancelledSubscription());
 			if(s != Operators.cancelledSubscription()) {
+				C b;
 				synchronized (this) {
+					b = buffer;
 					buffer = null;
 				}
 
@@ -240,6 +246,7 @@ final class FluxBufferBoundary<T, U, C extends Collection<? super T>>
 				}
 
 				actual.onError(t);
+				Operators.onDiscardMultiple(b, actual.currentContext());
 				return;
 			}
 			Operators.onErrorDropped(t, actual.currentContext());
@@ -282,7 +289,7 @@ final class FluxBufferBoundary<T, U, C extends Collection<? super T>>
 			else {
 				actual.onError(Operators.onOperatorError(this, Exceptions
 						.failWithOverflow(), b, actual.currentContext()));
-
+				Operators.onDiscardMultiple(b, actual.currentContext());
 				return false;
 			}
 		}
