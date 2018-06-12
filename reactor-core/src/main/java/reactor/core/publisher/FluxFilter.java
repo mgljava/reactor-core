@@ -84,7 +84,6 @@ final class FluxFilter<T> extends FluxOperator<T, T> {
 		public void onNext(T t) {
 			if (done) {
 				Operators.onNextDropped(t, ctx);
-				Operators.onDiscard(t, ctx);
 				return;
 			}
 
@@ -117,7 +116,6 @@ final class FluxFilter<T> extends FluxOperator<T, T> {
 		public boolean tryOnNext(T t) {
 			if (done) {
 				Operators.onNextDropped(t, ctx);
-				Operators.onDiscard(t, ctx);
 				return false;
 			}
 
@@ -219,7 +217,6 @@ final class FluxFilter<T> extends FluxOperator<T, T> {
 		public void onNext(T t) {
 			if (done) {
 				Operators.onNextDropped(t, ctx);
-				Operators.onDiscard(t, ctx);
 				return;
 			}
 
@@ -252,7 +249,6 @@ final class FluxFilter<T> extends FluxOperator<T, T> {
 		public boolean tryOnNext(T t) {
 			if (done) {
 				Operators.onNextDropped(t, ctx);
-				Operators.onDiscard(t, ctx);
 				return false;
 			}
 

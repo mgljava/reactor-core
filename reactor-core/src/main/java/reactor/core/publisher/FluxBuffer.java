@@ -133,7 +133,6 @@ final class FluxBuffer<T, C extends Collection<? super T>> extends FluxOperator<
 			if (done) {
 				Context ctx = actual.currentContext();
 				Operators.onNextDropped(t, ctx);
-				Operators.onDiscard(t, ctx);
 				return;
 			}
 
@@ -281,7 +280,6 @@ final class FluxBuffer<T, C extends Collection<? super T>> extends FluxOperator<
 			if (done) {
 				final Context ctx = actual.currentContext();
 				Operators.onNextDropped(t, ctx);
-				Operators.onDiscard(t, ctx);
 				return;
 			}
 
@@ -469,7 +467,6 @@ final class FluxBuffer<T, C extends Collection<? super T>> extends FluxOperator<
 			if (done) {
 				final Context ctx = actual.currentContext();
 				Operators.onNextDropped(t, ctx);
-				Operators.onDiscard(t, ctx);
 				return;
 			}
 

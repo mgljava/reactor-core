@@ -91,7 +91,6 @@ final class FluxFilterFuseable<T> extends FluxOperator<T, T> implements Fuseable
 			else {
 				if (done) {
 					Operators.onNextDropped(t, ctx);
-					Operators.onDiscard(t, ctx);
 					return;
 				}
 				boolean b;
@@ -124,7 +123,6 @@ final class FluxFilterFuseable<T> extends FluxOperator<T, T> implements Fuseable
 		public boolean tryOnNext(T t) {
 			if (done) {
 				Operators.onNextDropped(t, ctx);
-				Operators.onDiscard(t, ctx);
 				return false;
 			}
 
@@ -311,7 +309,6 @@ final class FluxFilterFuseable<T> extends FluxOperator<T, T> implements Fuseable
 			else {
 				if (done) {
 					Operators.onNextDropped(t, ctx);
-					Operators.onDiscard(t, ctx);
 					return;
 				}
 				boolean b;
@@ -344,7 +341,6 @@ final class FluxFilterFuseable<T> extends FluxOperator<T, T> implements Fuseable
 		public boolean tryOnNext(T t) {
 			if (done) {
 				Operators.onNextDropped(t, ctx);
-				Operators.onDiscard(t, ctx);
 				return false;
 			}
 
