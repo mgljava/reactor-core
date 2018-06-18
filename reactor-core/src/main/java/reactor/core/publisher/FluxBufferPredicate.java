@@ -31,6 +31,7 @@ import reactor.core.CoreSubscriber;
 import reactor.core.Exceptions;
 import reactor.core.Fuseable.ConditionalSubscriber;
 import reactor.util.annotation.Nullable;
+import reactor.util.context.Context;
 
 /**
  * Buffers elements into custom collections where the buffer boundary is determined by
@@ -185,8 +186,9 @@ final class FluxBufferPredicate<T, C extends Collection<? super T>>
 
 		@Override
 		public boolean tryOnNext(T t) {
+			final Context ctx = actual.currentContext();
 			if (done) {
-				Operators.onNextDropped(t, actual.currentContext());
+				Operators.onNextDropped(t, ctx);
 				return true;
 			}
 
@@ -196,8 +198,9 @@ final class FluxBufferPredicate<T, C extends Collection<? super T>>
 				match = predicate.test(t);
 			}
 			catch (Throwable e) {
-				onError(Operators.onOperatorError(s, e, t, actual.currentContext()));
-				Operators.onDiscardMultiple(buffer, actual.currentContext());
+				onError(Operators.onOperatorError(s, e, t, ctx));
+				Operators.onDiscardMultiple(buffer, ctx);
+				Operators.onDiscard(t, ctx);
 				return true;
 			}
 
