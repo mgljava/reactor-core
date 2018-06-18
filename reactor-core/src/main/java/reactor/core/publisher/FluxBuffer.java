@@ -277,8 +277,8 @@ final class FluxBuffer<T, C extends Collection<? super T>> extends FluxOperator<
 
 		@Override
 		public void onNext(T t) {
+			final Context ctx = actual.currentContext();
 			if (done) {
-				final Context ctx = actual.currentContext();
 				Operators.onNextDropped(t, ctx);
 				return;
 			}
@@ -293,7 +293,6 @@ final class FluxBuffer<T, C extends Collection<? super T>> extends FluxOperator<
 							"The bufferSupplier returned a null buffer");
 				}
 				catch (Throwable e) {
-					Context ctx = actual.currentContext();
 					onError(Operators.onOperatorError(s, e, t, ctx));
 					Operators.onDiscard(t, ctx); //t hasn't got a chance to end up in any buffer
 					return;
@@ -308,6 +307,10 @@ final class FluxBuffer<T, C extends Collection<? super T>> extends FluxOperator<
 					buffer = null;
 					actual.onNext(b);
 				}
+			}
+			else {
+				//dropping
+				Operators.onDiscard(t, ctx);
 			}
 
 			index = i + 1;
