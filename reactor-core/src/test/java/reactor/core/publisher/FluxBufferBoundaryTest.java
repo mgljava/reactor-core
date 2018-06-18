@@ -26,9 +26,12 @@ import org.junit.Assert;
 import org.junit.Test;
 import org.reactivestreams.Subscription;
 import reactor.core.CoreSubscriber;
+import reactor.core.Exceptions;
 import reactor.core.Scannable;
 import reactor.test.StepVerifier;
+import reactor.test.StepVerifierOptions;
 import reactor.test.publisher.FluxOperatorTest;
+import reactor.test.publisher.TestPublisher;
 import reactor.test.subscriber.AssertSubscriber;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -420,5 +423,39 @@ public class FluxBufferBoundaryTest
 		//the request is tracked when there is no parent
 		test.request(2);
 		assertThat(test.scan(Scannable.Attr.REQUESTED_FROM_DOWNSTREAM)).isEqualTo(2L);
+	}
+
+	@Test
+	public void discardOnCancel() {
+		StepVerifier.create(Flux.just(1, 2, 3)
+		                        .concatWith(Mono.never())
+		                        .buffer(Mono.never()))
+		            .thenAwait(Duration.ofMillis(10))
+		            .thenCancel()
+		            .verifyThenAssertThat()
+		            .hasDiscardedExactly(1, 2, 3);
+	}
+
+	@Test
+	public void discardOnError() {
+		StepVerifier.create(Flux.just(1, 2, 3)
+		                        .concatWith(Mono.error(new IllegalStateException("boom")))
+		                        .buffer(Mono.never()))
+		            .expectErrorMessage("boom")
+		            .verifyThenAssertThat()
+		            .hasDiscardedExactly(1, 2, 3);
+	}
+
+	@Test
+	public void discardOnEmitOverflow() {
+		final TestPublisher<Integer> publisher = TestPublisher.createNoncompliant(TestPublisher.Violation.REQUEST_OVERFLOW);
+
+		StepVerifier.create(publisher.flux()
+		                             .buffer(Mono.never()),
+		            StepVerifierOptions.create().initialRequest(0))
+		            .then(() -> publisher.emit(1, 2, 3))
+		            .expectErrorMatches(Exceptions::isOverflow)
+		            .verifyThenAssertThat()
+		            .hasDiscardedExactly(1, 2, 3);
 	}
 }
