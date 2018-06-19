@@ -17,7 +17,6 @@
 package reactor.core.publisher;
 
 import java.io.IOException;
-import java.lang.reflect.Array;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -706,5 +705,195 @@ public class FluxBufferWhenTest {
 				(m1, m2) -> m1.queue.isEmpty());
 
 		assertThat(queue.isEmpty()).isTrue();
+	}
+
+	@Test
+	public void discardOnCancel() {
+		StepVerifier.create(Flux.just(1, 2, 3)
+		                        .concatWith(Mono.never())
+		                        .bufferWhen(Flux.just(1), u -> Mono.never()))
+				.thenAwait(Duration.ofMillis(100))
+				.thenCancel()
+				.verifyThenAssertThat()
+				.hasDiscardedExactly(1, 2, 3);
+	}
+
+	@Test
+	public void discardOnCancelPostQueueing() {
+		List<Object> discarded = new ArrayList<>();
+
+		CoreSubscriber<List<Integer>> actual = new LambdaSubscriber<>(null, null, null, null);
+		FluxBufferWhen.BufferWhenMainSubscriber<Integer, Integer, Integer, List<Integer>> operator =
+				new FluxBufferWhen.BufferWhenMainSubscriber<Integer, Integer, Integer, List<Integer>>(actual,
+						ArrayList::new,
+						Queues.small(),
+						Flux.just(1), i -> Flux.never());
+		operator.onSubscribe(new Operators.EmptySubscription());
+
+		Hooks.onDiscard(discarded::add);
+		try {
+			operator.buffers.put(0L, Arrays.asList(4, 5));
+			operator.queue.offer(Arrays.asList(1, 2, 3));
+			operator.cancel();
+		}
+		finally {
+			Hooks.resetOnDiscard();
+		}
+
+		assertThat(discarded).containsExactly(1, 2, 3, 4, 5);
+	}
+
+	@Test
+	public void discardOnNextWhenNoBuffers() {
+		StepVerifier.create(Flux.just(1, 2, 3)
+		                        //buffer don't open in time
+		                        .bufferWhen(Mono.delay(Duration.ofSeconds(2)), u -> Mono.never()))
+		            .expectComplete()
+		            .verifyThenAssertThat()
+		            .hasDiscardedExactly(1, 2, 3);
+	}
+
+	@Test
+	public void discardOnError() {
+		StepVerifier.create(Flux.just(1, 2, 3)
+		                        .concatWith(Mono.error(new IllegalStateException("boom")))
+		                        .bufferWhen(Mono.delay(Duration.ofSeconds(2)), u -> Mono.never()))
+		            .expectErrorMessage("boom")
+		            .verifyThenAssertThat()
+		            .hasDiscardedExactly(1, 2, 3);
+	}
+
+	@Test
+	public void discardOnDrainCancelled() {
+		List<Object> discarded = new ArrayList<>();
+
+		CoreSubscriber<List<Integer>> actual = new LambdaSubscriber<>(null, null, null, null);
+		FluxBufferWhen.BufferWhenMainSubscriber<Integer, Integer, Integer, List<Integer>> operator =
+				new FluxBufferWhen.BufferWhenMainSubscriber<Integer, Integer, Integer, List<Integer>>(actual,
+						ArrayList::new,
+						Queues.small(),
+						Flux.just(1), i -> Flux.never());
+		operator.onSubscribe(new Operators.EmptySubscription());
+		operator.request(1);
+
+		Hooks.onDiscard(discarded::add);
+		try {
+			operator.buffers.put(0L, Arrays.asList(4, 5));
+			operator.queue.offer(Arrays.asList(1, 2, 3));
+			operator.cancelled = true;
+			operator.drain();
+		}
+		finally {
+			Hooks.resetOnDiscard();
+		}
+
+		//drain only deals with queue, other method calling drain should deal with the open buffers (notably cancel)
+		assertThat(discarded).containsExactly(1, 2, 3);
+	}
+
+	@Test
+	public void discardOnDrainDoneWithErrors() {
+		List<Object> discarded = new ArrayList<>();
+
+		CoreSubscriber<List<Integer>> actual = new LambdaSubscriber<>(null, e -> {}, null, null);
+		FluxBufferWhen.BufferWhenMainSubscriber<Integer, Integer, Integer, List<Integer>> operator =
+				new FluxBufferWhen.BufferWhenMainSubscriber<Integer, Integer, Integer, List<Integer>>(actual,
+						ArrayList::new,
+						Queues.small(),
+						Flux.just(1), i -> Flux.never());
+		operator.onSubscribe(new Operators.EmptySubscription());
+		operator.request(1);
+
+		Hooks.onDiscard(discarded::add);
+		try {
+			operator.buffers.put(0L, Arrays.asList(4, 5));
+			operator.queue.offer(Arrays.asList(1, 2, 3));
+			operator.onError(new IllegalStateException("boom")); //triggers the drain
+		}
+		finally {
+			Hooks.resetOnDiscard();
+		}
+
+		assertThat(discarded).containsExactly(1, 2, 3, 4, 5);
+	}
+
+	@Test
+	public void discardOnDrainEmittedAllCancelled() {
+		List<Object> discarded = new ArrayList<>();
+
+		CoreSubscriber<List<Integer>> actual = new LambdaSubscriber<>(null, null, null, null);
+		FluxBufferWhen.BufferWhenMainSubscriber<Integer, Integer, Integer, List<Integer>> operator =
+				new FluxBufferWhen.BufferWhenMainSubscriber<Integer, Integer, Integer, List<Integer>>(actual,
+						ArrayList::new,
+						Queues.small(),
+						Flux.just(1), i -> Flux.never());
+		operator.onSubscribe(new Operators.EmptySubscription());
+
+		Hooks.onDiscard(discarded::add);
+		try {
+			operator.buffers.put(0L, Arrays.asList(4, 5));
+			operator.queue.offer(Arrays.asList(1, 2, 3));
+			operator.cancelled = true;
+			operator.drain();
+		}
+		finally {
+			Hooks.resetOnDiscard();
+		}
+
+		//drain only deals with queue, other method calling drain should deal with the open buffers (notably cancel)
+		assertThat(discarded).containsExactly(1, 2, 3);
+	}
+
+	@Test
+	public void discardOnDrainEmittedAllWithErrors() {
+		List<Object> discarded = new ArrayList<>();
+
+		CoreSubscriber<List<Integer>> actual = new LambdaSubscriber<>(null, e -> {}, null, null);
+		FluxBufferWhen.BufferWhenMainSubscriber<Integer, Integer, Integer, List<Integer>> operator =
+				new FluxBufferWhen.BufferWhenMainSubscriber<Integer, Integer, Integer, List<Integer>>(actual,
+						ArrayList::new,
+						Queues.small(),
+						Flux.just(1), i -> Flux.never());
+		operator.onSubscribe(new Operators.EmptySubscription());
+
+		Hooks.onDiscard(discarded::add);
+		try {
+			operator.buffers.put(0L, Arrays.asList(4, 5));
+			operator.queue.offer(Arrays.asList(1, 2, 3));
+			operator.onError(new IllegalStateException("boom"));
+		}
+		finally {
+			Hooks.resetOnDiscard();
+		}
+
+		assertThat(discarded).containsExactly(1, 2, 3, 4, 5);
+	}
+
+	@Test
+	public void discardOnOpenError() {
+		StepVerifier.withVirtualTime(() -> Flux.interval(Duration.ZERO, Duration.ofMillis(100)) // 0, 1, 2
+		                                       .map(Long::intValue)
+		                                       .take(3)
+		                                       .bufferWhen(Flux.interval(Duration.ZERO, Duration.ofMillis(100)),
+				                                       u -> (u == 2) ? null : Mono.never()))
+		            .thenAwait(Duration.ofSeconds(2))
+		            .expectErrorMessage("The bufferClose returned a null Publisher")
+		            .verifyThenAssertThat()
+		            .hasDiscardedExactly(0, 1, 1);
+	}
+
+	@Test
+	public void discardOnBoundaryError() {
+		StepVerifier.withVirtualTime(() -> Flux.interval(Duration.ZERO, Duration.ofMillis(100)) // 0, 1, 2
+		                                       .map(Long::intValue)
+		                                       .take(3)
+		                                       .bufferWhen(Flux.interval(Duration.ZERO, Duration.ofMillis(100)),
+				                                       u -> (u == 2) ? Mono.error(new IllegalStateException("boom"))
+						                                       : Mono.never()))
+		            .thenAwait(Duration.ofSeconds(2))
+		            .expectErrorMessage("boom")
+		            .verifyThenAssertThat()
+		            .hasDiscardedExactly(0, 1, 1);
+
 	}
 }
